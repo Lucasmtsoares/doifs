@@ -1,0 +1,6 @@
+playwright
+fastapi
+uvicorn[standard]
+motor  # MongoDB async driver
+python-dotenv
+loguru
