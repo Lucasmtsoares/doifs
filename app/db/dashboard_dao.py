@@ -1,6 +1,6 @@
 # app/db/schema.py
 from datetime import datetime, timedelta
-
+from dateutil.relativedelta import relativedelta
 from bson import SON
 from app.db.connection_db import Connection
 import asyncio
@@ -159,6 +159,72 @@ class DashboardDAO:
             print(f"Error: {e}")
             return []
             
+    async def get_top_responsibles(self):
+        
+        today = datetime.now()
+        year_previous_ = today - relativedelta(years=1) 
+
+        # Data formatada
+        year_previous = year_previous_.strftime('%Y-%m-%d')
+                
+        pipeline = [
+            {
+                "$match": {
+                    "type": { "$in": ["Nomeação", "Exoneração"] },
+                    "date": {"$gt": year_previous}
+                }
+            },
+            
+            {
+                "$project": {
+                    "_id": 0,
+                    "type": 1,
+                    "institute": 1,
+                    "responsible": 1
+                }
+            },
+            
+            {
+                "$group": {
+                    "_id": "$responsible",
+                    "institute": { "$first": "$institute" },
+                    "nomeacoes": {
+                    "$sum": {
+                    "$cond": [{ "$eq": ["$type", "Nomeação"] }, 1, 0]
+                    }
+                    },
+                    "exoneracoes": {
+                        "$sum": {
+                        "$cond": [{ "$eq": ["$type", "Exoneração"] }, 1, 0]
+                        }
+                    },
+                    "total": { "$sum": 1},
+                        
+                    }
+            },
+            {
+                "$sort": { "total": -1 }
+            },
+            
+            {
+                "$project": {
+                    "_id": 0,
+                    "responsible": "$_id",
+                    "institute": "$institute",
+                    "responsible_institute": { "$concat": [ "$_id", " - ", "$institute" ] },
+                    "total_acts": "$total",
+                    "nomeacoes": "$nomeacoes",
+                    "exoneracoes": "$exoneracoes",
+                }
+            }
+            
+        ]
+        
+        res = await self.db['IFAL'].aggregate(pipeline).to_list(10)
+        self.close()
+        return res
+       
+        
         
     def close(self):
         print("Fechando conexão...")
@@ -187,7 +253,7 @@ def generate_days_dic(todays_last=90):
 
 if __name__ == "__main__":
     test = DashboardDAO()
-    a = asyncio.run(test.get_total_types())
+    a = asyncio.run(test.get_top_responsibles())
     print(a)
     
     
@@ -196,5 +262,87 @@ if __name__ == "__main__":
 
 #[{'date': '2025-06-30', 'nomeacoes': 1, 'exoneracoes': 0}, {'date': '2025-08-09', 'nomeacoes': 1, 'exoneracoes': 0}]
 """
+const chartData = [
+    {
+        'director': 'Dr. João Silva de Oliveira Filho',
+        'institute': 'IFAL',
+        'director_institute': 'Dr. João S. de O. Filho - IFAL', 
+        'total_acts': 987,
+        'nomeacoes': 438,
+        'exoneracoes': 549
+    },
+    {
+        'director': 'Dra. Maria Aparecida Rodrigues',
+        'institute': 'IFCE',
+        'director_institute': 'Dra. M. Aparecida R. - IFCE',
+        'total_acts': 852,
+        'nomeacoes': 441,
+        'exoneracoes': 411
+    },
+    {
+        'director': 'Eng. Pedro Henrique Vasconcelos',
+        'institute': 'IFSP',
+        'director_institute': 'Eng. Pedro H. Vasconcelos - IFSP',
+        'total_acts': 745,
+        'nomeacoes': 418,
+        'exoneracoes': 327
+    },
+    {
+        'director': 'Prof. Ana Cláudia Pereira Santos',
+        'institute': 'IFRJ',
+        'director_institute': 'Prof. Ana C. P. Santos - IFRJ',
+        'total_acts': 698,
+        'nomeacoes': 280,
+        'exoneracoes': 418
+    },
+    {
+        'director': 'Sr. Carlos Alberto Guimarães',
+        'institute': 'IFMG',
+        'director_institute': 'Sr. Carlos A. Guimarães - IFMG',
+        'total_acts': 610,
+        'nomeacoes': 342,
+        'exoneracoes': 268
+    },
+    {
+        'director': 'Sra. Fernanda Lima Azevedo',
+        'institute': 'IFRS',
+        'director_institute': 'Sra. Fernanda L. Azevedo - IFRS',
+        'total_acts': 550,
+        'nomeacoes': 296,
+        'exoneracoes': 254
+    },
+    {
+        'director': 'Dr. Roberto Gomes da Costa',
+        'institute': 'IFPE',
+        'director_institute': 'Dr. Roberto G. da Costa - IFPE',
+        'total_acts': 490,
+        'nomeacoes': 229,
+        'exoneracoes': 261
+    },
+    {
+        'director': 'Msc. Patrícia Mendes Rocha',
+        'institute': 'IFPR',
+        'director_institute': 'Msc. Patrícia M. Rocha - IFPR',
+        'total_acts': 412,
+        'nomeacoes': 177,
+        'exoneracoes': 235
+    },
+    {
+        'director': 'Sr. José Paulo Medeiros',
+        'institute': 'IFPB',
+        'director_institute': 'Sr. José P. Medeiros - IFPB',
+        'total_acts': 365,
+        'nomeacoes': 215,
+        'exoneracoes': 150
+    },
+    {
+        'director': 'Dra. Juliana Ferreira Campos',
+        'institute': 'IFTO',
+        'director_institute': 'Dra. Juliana F. Campos - IFTO',
+        'total_acts': 290,
+        'nomeacoes': 135,
+        'exoneracoes': 155
+    }
+];
 
 """
