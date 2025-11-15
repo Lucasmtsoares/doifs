@@ -5,6 +5,7 @@ from bson import SON
 from app.db.connection_db import Connection
 import asyncio
 from app.models.publication import Publication
+import json 
 
 class DashboardDAO:
     def __init__(self):
@@ -224,8 +225,113 @@ class DashboardDAO:
         self.close()
         return res
        
+    async def get_overview_institutes(self):
         
+        pipeline = [
+                {
+                "$addFields": {
+                # Cria um campo numérico para ordenar o mês corretamente (necessário!)
+                "month_num": {
+                    "$switch": {
+                    "branches": [
+                        { "case": { "$eq": ["$month", "Jan"] }, "then": 1 },
+                        { "case": { "$eq": ["$month", "Fev"] }, "then": 2 },
+                        { "case": { "$eq": ["$month", "Mar"] }, "then": 3 },
+                        { "case": { "$eq": ["$month", "Abr"] }, "then": 4 },
+                        { "case": { "$eq": ["$month", "Mai"] }, "then": 5 },
+                        { "case": { "$eq": ["$month", "Jun"] }, "then": 6 },
+                        { "case": { "$eq": ["$month", "Jul"] }, "then": 7 },
+                        { "case": { "$eq": ["$month", "Ago"] }, "then": 8 },
+                        { "case": { "$eq": ["$month", "Set"] }, "then": 9 },
+                        { "case": { "$eq": ["$month", "Out"] }, "then": 10 },
+                        { "case": { "$eq": ["$month", "Nov"] }, "then": 11 },
+                        { "case": { "$eq": ["$month", "Dez"] }, "then": 12 }
+                    ],
+                    "default": 0
+                    }
+                }
+                }
+            },
+            {
+                # Opcional: Filtra por um intervalo de anos se a coleção for muito grande
+                "$match": {
+                "institute": { "$in": ["IFAC", "IFAL", "IFAP", "IFAM", "IFBA", "IF Baiano", "IFCE", "IFB",
+                                      "IFG", "IF Goiano", "IFES", "IFMA", "IFMG", "IFNMG", "IF Sudeste MG",
+                                       "IFSULDEMINAS", "IFTM", "IFMT", "IFMS", "IFPA", "IFPB", "IFPE",
+                                       "IF Sertão PE", "IFPI", "IFPR", "IFRJ", "IFF", "IFRN", "IFRS",
+                                       "IFFar", "IFSUL", "IFRO", "IFRR", "IFSC", "IFC", "IFSP", "IFS", "IFTO"] }, # Exemplo: restringe a dois institutos
+                # year: { $gte: 2020 }
+                }
+            },
+
+            # Estágio 2: Agrupamento Mensal e Contagem
+            {
+                "$group": {
+                #Chave de Agrupamento: Instituto, Ano e Mês (numérico para ordenação)
+                "_id": {
+                    "institute": "$institute",
+                    "year": "$year",
+                    "month": "$month",
+                    "month_num": "$month_num"
+                },
+                
+                # Acumulador de Nomeações
+                "nomeacoes": {
+                    "$sum": {
+                    "$cond": [{ "$eq": ["$type", "Nomeação"] }, 1, 0]
+                    }
+                },
+                
+                # Acumulador de Exonerações
+                "exoneracoes": {
+                    "$sum": {
+                    "$cond": [{ "$eq": ["$type", "Exoneração"] }, 1, 0]
+                    }
+                }
+                }
+            },
+
+                # Estágio 3: Ordenação Final (Obrigatório para a série temporal)
+            {
+                "$sort": {
+                "_id.institute": 1,
+                "_id.year": 1,
+                "_id.month_num": 1 # Garante a ordem Jan, Fev, Mar...
+                }
+            },
+
+            # Estágio 4: Projeção Final (Formato da Saída)
+            {
+                "$project": {
+                "_id": 0,
+                "institute": "$_id.institute",
+                "year": "$_id.year",
+                "month": "$_id.month",
+                "nomeacoes": "$nomeacoes",
+                "exoneracoes": "$exoneracoes"
+                }
+            }
+        ]
         
+        res = await self.db['IFAL'].aggregate(pipeline).to_list(None)
+        
+        print("Teste")
+        self.close()
+        return res 
+        
+    async def get_publications_last(self):
+        print("Útima publicação")
+        res = await self.db['IFAL'].find({}, {"_id": 0, "institute": 1, "type": 1, "date": 1}).sort("date", -1).limit(1).to_list(1)
+        self.close()
+        return res
+        
+    async def get_total_publications(self):
+        print("Total de publicações...")
+        res = await self.db['IFAL'].count_documents({})
+        self.close()
+        return res
+      
+      
     def close(self):
         print("Fechando conexão...")
         self.client.close()
@@ -251,9 +357,10 @@ def generate_days_dic(todays_last=90):
 
 
 
+
 if __name__ == "__main__":
     test = DashboardDAO()
-    a = asyncio.run(test.get_top_responsibles())
+    a = asyncio.run(test.get_publications_last())
     print(a)
     
     
@@ -261,88 +368,107 @@ if __name__ == "__main__":
 
 
 #[{'date': '2025-06-30', 'nomeacoes': 1, 'exoneracoes': 0}, {'date': '2025-08-09', 'nomeacoes': 1, 'exoneracoes': 0}]
+
+
 """
-const chartData = [
-    {
-        'director': 'Dr. João Silva de Oliveira Filho',
-        'institute': 'IFAL',
-        'director_institute': 'Dr. João S. de O. Filho - IFAL', 
-        'total_acts': 987,
-        'nomeacoes': 438,
-        'exoneracoes': 549
-    },
-    {
-        'director': 'Dra. Maria Aparecida Rodrigues',
-        'institute': 'IFCE',
-        'director_institute': 'Dra. M. Aparecida R. - IFCE',
-        'total_acts': 852,
-        'nomeacoes': 441,
-        'exoneracoes': 411
-    },
-    {
-        'director': 'Eng. Pedro Henrique Vasconcelos',
-        'institute': 'IFSP',
-        'director_institute': 'Eng. Pedro H. Vasconcelos - IFSP',
-        'total_acts': 745,
-        'nomeacoes': 418,
-        'exoneracoes': 327
-    },
-    {
-        'director': 'Prof. Ana Cláudia Pereira Santos',
-        'institute': 'IFRJ',
-        'director_institute': 'Prof. Ana C. P. Santos - IFRJ',
-        'total_acts': 698,
-        'nomeacoes': 280,
-        'exoneracoes': 418
-    },
-    {
-        'director': 'Sr. Carlos Alberto Guimarães',
-        'institute': 'IFMG',
-        'director_institute': 'Sr. Carlos A. Guimarães - IFMG',
-        'total_acts': 610,
-        'nomeacoes': 342,
-        'exoneracoes': 268
-    },
-    {
-        'director': 'Sra. Fernanda Lima Azevedo',
-        'institute': 'IFRS',
-        'director_institute': 'Sra. Fernanda L. Azevedo - IFRS',
-        'total_acts': 550,
-        'nomeacoes': 296,
-        'exoneracoes': 254
-    },
-    {
-        'director': 'Dr. Roberto Gomes da Costa',
-        'institute': 'IFPE',
-        'director_institute': 'Dr. Roberto G. da Costa - IFPE',
-        'total_acts': 490,
-        'nomeacoes': 229,
-        'exoneracoes': 261
-    },
-    {
-        'director': 'Msc. Patrícia Mendes Rocha',
-        'institute': 'IFPR',
-        'director_institute': 'Msc. Patrícia M. Rocha - IFPR',
-        'total_acts': 412,
-        'nomeacoes': 177,
-        'exoneracoes': 235
-    },
-    {
-        'director': 'Sr. José Paulo Medeiros',
-        'institute': 'IFPB',
-        'director_institute': 'Sr. José P. Medeiros - IFPB',
-        'total_acts': 365,
-        'nomeacoes': 215,
-        'exoneracoes': 150
-    },
-    {
-        'director': 'Dra. Juliana Ferreira Campos',
-        'institute': 'IFTO',
-        'director_institute': 'Dra. Juliana F. Campos - IFTO',
-        'total_acts': 290,
-        'nomeacoes': 135,
-        'exoneracoes': 155
-    }
-];
+    { "region": "norte",        "name": "Norte",        "nomeacoes": 3500,  "exoneracoes": 800 },
+    { "region": "nordeste",     "name": "Nordeste",     "nomeacoes": 8000,  "exoneracoes": 2000 },
+    { "region": "centro_oeste", "name": "Centro-Oeste", "nomeacoes": 4500,  "exoneracoes": 1200 },
+    { "region": "sudeste",      "name": "Sudeste",      "nomeacoes": 10500, "exoneracoes": 2800 },
+    { "region": "sul",          "name": "Sul",          "nomeacoes": 5500,  "exoneracoes": 1500 }
+
+"""
+
+"""
+
+    { "uf": "SP", "state_name": "São Paulo", "nomeacoes": 98, "exoneracoes": 24, "year": 2025 },
+    { "uf": "MG", "state_name": "Minas Gerais", "nomeacoes": 85, "exoneracoes": 21, "year": 2025 },
+    { "uf": "RJ", "state_name": "Rio de Janeiro", "nomeacoes": 79, "exoneracoes": 19, "year": 2025 },
+    { "uf": "ES", "state_name": "Espírito Santo", "nomeacoes": 45, "exoneracoes": 12, "year": 2025 },
+    
+    // Sul
+    { "uf": "PR", "state_name": "Paraná", "nomeacoes": 70, "exoneracoes": 17, "year": 2025 },
+    { "uf": "RS", "state_name": "Rio Grande do Sul", "nomeacoes": 65, "exoneracoes": 16, "year": 2025 },
+    { "uf": "SC", "state_name": "Santa Catarina", "nomeacoes": 55, "exoneracoes": 14, "year": 2025 },
+    
+    // Nordeste
+    { "uf": "BA", "state_name": "Bahia", "nomeacoes": 50, "exoneracoes": 13, "year": 2025 },
+    { "uf": "PE", "state_name": "Pernambuco", "nomeacoes": 48, "exoneracoes": 12, "year": 2025 },
+    { "uf": "CE", "state_name": "Ceará", "nomeacoes": 46, "exoneracoes": 11, "year": 2025 },
+    { "uf": "MA", "state_name": "Maranhão", "nomeacoes": 38, "exoneracoes": 9, "year": 2025 },
+    { "uf": "RN", "state_name": "Rio Grande do Norte", "nomeacoes": 35, "exoneracoes": 8, "year": 2025 },
+    { "uf": "PB", "state_name": "Paraíba", "nomeacoes": 33, "exoneracoes": 8, "year": 2025 },
+    { "uf": "PI", "state_name": "Piauí", "nomeacoes": 28, "exoneracoes": 7, "year": 2025 },
+    { "uf": "AL", "state_name": "Alagoas", "nomeacoes": 26, "exoneracoes": 6, "year": 2025 },
+    { "uf": "SE", "state_name": "Sergipe", "nomeacoes": 24, "exoneracoes": 6, "year": 2025 },
+    
+    // Centro-Oeste
+    { "uf": "GO", "state_name": "Goiás", "nomeacoes": 60, "exoneracoes": 15, "year": 2025 },
+    { "uf": "DF", "state_name": "Distrito Federal", "nomeacoes": 58, "exoneracoes": 14, "year": 2025 },
+    { "uf": "MT", "state_name": "Mato Grosso", "nomeacoes": 52, "exoneracoes": 13, "year": 2025 },
+    { "uf": "MS", "state_name": "Mato Grosso do Sul", "nomeacoes": 40, "exoneracoes": 10, "year": 2025 },
+    
+    // Norte
+    { "uf": "PA", "state_name": "Pará", "nomeacoes": 42, "exoneracoes": 10, "year": 2025 },
+    { "uf": "AM", "state_name": "Amazonas", "nomeacoes": 37, "exoneracoes": 9, "year": 2025 },
+    { "uf": "RO", "state_name": "Rondônia", "nomeacoes": 30, "exoneracoes": 7, "year": 2025 },
+    { "uf": "TO", "state_name": "Tocantins", "nomeacoes": 29, "exoneracoes": 7, "year": 2025 },
+    { "uf": "AC", "state_name": "Acre", "nomeacoes": 22, "exoneracoes": 5, "year": 2025 },
+    { "uf": "AP", "state_name": "Amapá", "nomeacoes": 21, "exoneracoes": 5, "year": 2025 },
+    { "uf": "RR", "state_name": "Roraima", "nomeacoes": 19, "exoneracoes": 4, "year": 2025 },
+
+    // =========================================================================
+    // --- DADOS DO ANO 2024 (Escala de Dezenas) ---
+    // =========================================================================
+    // (Valores ligeiramente menores que 2025)
+    // Sudeste
+    { "uf": "SP", "state_name": "São Paulo", "nomeacoes": 90, "exoneracoes": 20, "year": 2024 },
+    { "uf": "MG", "state_name": "Minas Gerais", "nomeacoes": 78, "exoneracoes": 18, "year": 2024 },
+    { "uf": "RJ", "state_name": "Rio de Janeiro", "nomeacoes": 70, "exoneracoes": 16, "year": 2024 },
+    { "uf": "ES", "state_name": "Espírito Santo", "nomeacoes": 40, "exoneracoes": 10, "year": 2024 },
+    
+    // Sul
+    { "uf": "PR", "state_name": "Paraná", "nomeacoes": 65, "exoneracoes": 15, "year": 2024 },
+    { "uf": "RS", "state_name": "Rio Grande do Sul", "nomeacoes": 60, "exoneracoes": 14, "year": 2024 },
+    { "uf": "SC", "state_name": "Santa Catarina", "nomeacoes": 50, "exoneracoes": 12, "year": 2024 },
+    
+    // Nordeste
+    { "uf": "BA", "state_name": "Bahia", "nomeacoes": 45, "exoneracoes": 11, "year": 2024 },
+    { "uf": "PE", "state_name": "Pernambuco", "nomeacoes": 43, "exoneracoes": 10, "year": 2024 },
+    { "uf": "CE", "state_name": "Ceará", "nomeacoes": 41, "exoneracoes": 9, "year": 2024 },
+    { "uf": "MA", "state_name": "Maranhão", "nomeacoes": 34, "exoneracoes": 8, "year": 2024 },
+    { "uf": "RN", "state_name": "Rio Grande do Norte", "nomeacoes": 30, "exoneracoes": 7, "year": 2024 },
+    { "uf": "PB", "state_name": "Paraíba", "nomeacoes": 28, "exoneracoes": 6, "year": 2024 },
+    { "uf": "PI", "state_name": "Piauí", "nomeacoes": 24, "exoneracoes": 6, "year": 2024 },
+    { "uf": "AL", "state_name": "Alagoas", "nomeacoes": 22, "exoneracoes": 5, "year": 2024 },
+    { "uf": "SE", "state_name": "Sergipe", "nomeacoes": 20, "exoneracoes": 5, "year": 2024 },
+    
+    // Centro-Oeste
+    { "uf": "GO", "state_name": "Goiás", "nomeacoes": 55, "exoneracoes": 13, "year": 2024 },
+    { "uf": "DF", "state_name": "Distrito Federal", "nomeacoes": 53, "exoneracoes": 12, "year": 2024 },
+    { "uf": "MT", "state_name": "Mato Grosso", "nomeacoes": 47, "exoneracoes": 11, "year": 2024 },
+    { "uf": "MS", "state_name": "Mato Grosso do Sul", "nomeacoes": 35, "exoneracoes": 9, "year": 2024 },
+    
+    // Norte
+    { "uf": "PA", "state_name": "Pará", "nomeacoes": 38, "exoneracoes": 9, "year": 2024 },
+    { "uf": "AM", "state_name": "Amazonas", "nomeacoes": 33, "exoneracoes": 8, "year": 2024 },
+    { "uf": "RO", "state_name": "Rondônia", "nomeacoes": 26, "exoneracoes": 6, "year": 2024 },
+    { "uf": "TO", "state_name": "Tocantins", "nomeacoes": 25, "exoneracoes": 6, "year": 2024 },
+    { "uf": "AC", "state_name": "Acre", "nomeacoes": 18, "exoneracoes": 4, "year": 2024 },
+    { "uf": "AP", "state_name": "Amapá", "nomeacoes": 17, "exoneracoes": 4, "year": 2024 },
+    { "uf": "RR", "state_name": "Roraima", "nomeacoes": 15, "exoneracoes": 3, "year": 2024 },
+
+"""
+
+
+
+
+"""
+
+"IFAC", "IFAL", "IFAP", "IFAM", "IFBA", "IF Baiano", "IFCE", "IFB",
+  "IFG", "IF Goiano", "IFES", "IFMA", "IFMG", "IFNMG", "IF Sudeste MG",
+  "IFSULDEMINAS", "IFTM", "IFMT", "IFMS", "IFPA", "IFPB", "IFPE",
+  "IF Sertão PE", "IFPI", "IFPR", "IFRJ", "IFF", "IFRN", "IFRS",
+  "IFFar", "IFSUL", "IFRO", "IFRR", "IFSC", "IFC", "IFSP", "IFS", "IFTO"
 
 """
