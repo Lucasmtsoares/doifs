@@ -20,13 +20,13 @@ async def get_publication(
 
 
 @app.get("/dashboard")
-async def test():
+async def get_totals():
     dash = DashboardDAO()
-    count_types = await dash.get_total_types()
+    #count_types = await dash.get_total_types()
     
     
     return {
-        'count_types': count_types
+        'count_types': await dash.get_total_types()
         }
 
 """
