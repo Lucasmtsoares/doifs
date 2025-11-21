@@ -2,8 +2,8 @@ from app.db.dashboard_dao import DashboardDAO
 
 
 class PublicationController:
-    def __init__(self):
-        self.dash = DashboardDAO()
+    def __init__(self, dashboard_dao: DashboardDAO):
+        self.dash = dashboard_dao
     
     async def get_totals_controller(self):
         #retorna totais
@@ -20,8 +20,8 @@ class PublicationController:
             
 class PeriodicController:
     
-    def __init__(self):
-        self.dash = DashboardDAO()
+    def __init__(self, dashboard_dao: DashboardDAO):
+        self.dash = dashboard_dao
         
     async def get_periodic_type_controller(self):
         periodic_types = await self.dash.get_periodic_type_counts()
@@ -33,8 +33,8 @@ class PeriodicController:
         
 class PersonnelController:
     
-    def __init__(self):
-        self.dash = DashboardDAO()
+    def __init__(self, dashboard_dao: DashboardDAO):
+        self.dash = dashboard_dao
         
     async def get_top_personnel_controller(self):
         tops_personnel = await self.dash.get_top_personnel()
@@ -46,8 +46,8 @@ class PersonnelController:
         
 class InstituteController:
     
-    def __init__(self):
-        self.dash = DashboardDAO()
+    def __init__(self, dashboard_dao: DashboardDAO):
+        self.dash = dashboard_dao
         
     async def get_institutes_overview_controller(self):
         institutes_overview = await self.dash.get_institutes_overview()
@@ -59,8 +59,8 @@ class InstituteController:
         
 class RegionController:
     
-    def __init__(self):
-        self.dash = DashboardDAO()
+    def __init__(self, dashboard_dao: DashboardDAO):
+        self.dash = dashboard_dao
         
     async def get_region_totals_controller(self):
         region_totals = await self.dash.get_region_totals()
@@ -72,8 +72,8 @@ class RegionController:
         
 class StatesController:
     
-    def __init__(self):
-        self.dash = DashboardDAO()
+    def __init__(self, dashboard_dao: DashboardDAO):
+        self.dash = dashboard_dao
         
     async def get_state_totals_controller(self):
         state_totals = await self.dash.get_state_totals()

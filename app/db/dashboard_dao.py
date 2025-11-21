@@ -6,12 +6,17 @@ from app.db.connection_db import Connection
 import asyncio
 from app.models.publication import Publication
 import json 
+from motor.motor_asyncio import AsyncIOMotorDatabase, AsyncIOMotorCollection
+
+DB_NAME = "publications_dou"
+COLLETION_NAME = "IFAL"
 
 class DashboardDAO:
-    def __init__(self):
-        connection = Connection()
-        self.client = connection.connection()
-        self.db = self.client['publications_dou']
+    def __init__(self, db: AsyncIOMotorDatabase):
+        #connection = Connection()
+        #self.client = connection.connection()
+        #self.db = self.client['publications_dou']
+        self.colletion: AsyncIOMotorCollection = db[COLLETION_NAME]
 
     async def get_type_counts(self):
         print("Buscando...")
@@ -56,9 +61,7 @@ class DashboardDAO:
             }
         ]
         
-        resultado = await self.db['IFAL'].aggregate(pipeline).to_list(None)
-        
-        self.close()
+        resultado = await self.colletion.aggregate(pipeline).to_list(None)
         
         # Retorna o primeiro (e único) item da lista, ou um padrão se vazio
         return resultado[0] if resultado else {"nomeacoes": 0, "exoneracoes": 0}   
@@ -120,9 +123,8 @@ class DashboardDAO:
 
     
         #total_type_period = {}
-        resultado = await self.db["IFAL"].aggregate(pipeline).to_list(None)
+        resultado = await self.colletion.aggregate(pipeline).to_list(None)
         
-        self.close() 
         return resultado
 
     async def get_periodic_type_counts(self):
@@ -153,7 +155,6 @@ class DashboardDAO:
                     # Se não existir, adiciona o dicionário com zeros
                     result.append(days_set)
 
-            self.close()
             return result
         
         except TypeError as e:
@@ -221,8 +222,8 @@ class DashboardDAO:
             
         ]
         
-        res = await self.db['IFAL'].aggregate(pipeline).to_list(10)
-        self.close()
+        res = await self.colletion.aggregate(pipeline).to_list(10)
+        
         return res
        
     async def get_institutes_overview(self):
@@ -313,22 +314,19 @@ class DashboardDAO:
             }
         ]
         
-        res = await self.db['IFAL'].aggregate(pipeline).to_list(None)
+        res = await self.colletion.aggregate(pipeline).to_list(None)
         
         print("Teste")
-        self.close()
         return res 
         
     async def get_latest_publications(self):
         print("Útima publicação")
-        res = await self.db['IFAL'].find({}, {"_id": 0, "institute": 1, "type": 1, "date": 1}).sort("date", -1).limit(1).to_list(1)
-        self.close()
+        res = await self.colletion.find({}, {"_id": 0, "institute": 1, "type": 1, "date": 1}).sort("date", -1).limit(1).to_list(1)
         return res
         
     async def get_publication_count(self):
         print("Total de publicações...")
-        res = await self.db['IFAL'].count_documents({})
-        self.close()
+        res = await self.colletion.count_documents({})
         return res
     
     async def get_region_totals(self):
@@ -398,8 +396,7 @@ class DashboardDAO:
             }
         ]
         
-        res = await self.db['IFAL'].aggregate(pipeline).to_list(None)
-        self.close()
+        res = await self.colletion.aggregate(pipeline).to_list(None)
         return res
   
     async def get_state_totals(self):
@@ -516,8 +513,7 @@ class DashboardDAO:
             }
         ]
         
-        res = await self.db['IFAL'].aggregate(pipeline).to_list(None)
-        self.close()
+        res = await self.colletion.aggregate(pipeline).to_list(None)
         return res
     
     async def get_available_years(self):
@@ -552,13 +548,9 @@ class DashboardDAO:
                 
         ]
         
-        res = await self.db['IFAL'].aggregate(pipeline).to_list(None)
-        self.close()
+        res = await self.colletion.aggregate(pipeline).to_list(None)
         return res
-         
-    def close(self):
-        print("Fechando conexão...")
-        self.client.close()
+
         
     
         
